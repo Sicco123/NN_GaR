@@ -4,7 +4,15 @@ import torch
 from torch.utils.data import Dataset
 
 
-def read_df(df, label_name, train_size, val_size):
+def normalize_data(X):
+    column_mean = np.mean(X, axis =0)
+    X_demeaned = X - column_mean
+    sample_stdv = np.std(X, axis = 0)
+    X_norm = np.divide(X_demeaned, sample_stdv)
+
+    return X_norm
+
+def read_df(df, label_name, train_size, val_size, normalize = True):
     """
     This function is for reading the sample testing dataframe.
 
@@ -21,6 +29,7 @@ def read_df(df, label_name, train_size, val_size):
     test_target_df = target_df.iloc[(train_size + val_size):, :]
 
     covariate_df = df.iloc[:, df.columns != label_name]
+    covariate_df = normalize_data(covariate_df) if normalize else covariate_df
     train_covariate_df = covariate_df.iloc[:train_size]
     val_covariate_df = covariate_df.iloc[:(train_size+val_size)]
     test_covariate_df = covariate_df.iloc[(train_size + val_size):]
@@ -46,8 +55,6 @@ class NCMQRNN_dataset(Dataset):
         self.covariate_df = covariate_df
         self.horizon_size = horizon_size
 
-        print(target_df.shape)
-        print(covariate_df.shape)
 
 
     def __len__(self):

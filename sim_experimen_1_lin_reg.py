@@ -9,7 +9,7 @@ from functools import partial
 from prepare_data import prepare_forecast_target, prepare_forecast_predictors
 
 horizon_list = [1,2,3,4,5,6,12]
-quantile_levels = [0.95,0.9,0.75,0.5,0.25,0.1,0.05]
+quantile_levels = [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95]
 sample_sizes = [150, 250, 500]
 M = 10000
 dir_to_store_simulation = "simulated_data"
@@ -40,10 +40,10 @@ def estimation(h, X_train, X, sample_size, y_star, m):
 
 def main():
     start = time.time()
-    for m in range(3976,M):
+    for m in range(0,M):
 
         for sample_size in sample_sizes:
-            data = np.loadtxt(f'simulated_data/{sample_size}/{m}_221007.csv', delimiter=',')
+            data = np.loadtxt(f'simulated_data/{sample_size}/{m}_221014.csv', delimiter=',')
 
             y = data[:, 0]
             X = data[:, 1:]
