@@ -13,17 +13,19 @@ class GlobalDecoder(nn.Module):
                  hidden_size:int, 
                  covariate_size:int,
                  horizon_size:int,
+                 horizon_list:list,
                  context_size:int):
         super(GlobalDecoder,self).__init__()
         self.hidden_size = hidden_size
         self.covariate_size = covariate_size
         self.horizon_size = horizon_size
+        self.horizon_list = horizon_list
         self.context_size = context_size
 
-        self.linear1 = nn.Linear(in_features= hidden_size ,
-                                out_features= (horizon_size+1)*context_size)
+        self.linear1 = nn.Linear(in_features= self.hidden_size,
+                                out_features= (len(self.horizon_list)+1)*context_size)
 
-        self.activation = nn.ReLU()
+        self.activation = nn.Sigmoid()
     def forward(self, input):
         layer1_output = self.linear1(input)
         layer1_output = self.activation(layer1_output)
@@ -57,7 +59,7 @@ class LocalDecoder(nn.Module):
                                  out_features= horizon_size* context_size)
 
 
-        self.activation = nn.ReLu()
+        self.activation = nn.ReLU()
     
     def forward(self,input):
         layer1_output = self.linear1(input)
@@ -73,36 +75,40 @@ class Penalizer(nn.Module):
                 quantile_size,
                 context_size,
                 quantiles,
-                horizon_size):
+                horizon_size,
+                horizon_list,
+                initialization_prior = None,
+                target = None):
         super(Penalizer,self).__init__()
 
         self.quantiles = quantiles
         self.quantile_size = quantile_size
         self.horizon_size = horizon_size
         self.context_size = context_size
+        self.horizon_list = horizon_list
 
         self.l1_p_layers = nn.ModuleList()
-        for h in range(horizon_size): # For every horizon we set a different layer
+        for h in range(len(self.horizon_list)): # For every horizon we set a different layer
             l1_p_layer = l1_p(context_size*2,
-                             quantile_size)
+                             quantile_size, quantile_levels = self.quantiles, target = target, initialization_prior = initialization_prior)
 
             self.l1_p_layers.append(l1_p_layer)
 
     def forward(self, global_input):
 
         l1_penalties = torch.zeros((self.horizon_size))
-        for h in range(self.horizon_size):
+        quantile_output = torch.zeros((global_input.shape[0], self.horizon_size, self.quantile_size))
+        for h in range(len(self.horizon_list)):
             l1_p_layer = self.l1_p_layers[h]
             c_alpha = global_input[:, :, -self.context_size:]  # get c_alpha
             c_t_k = global_input[:, :, h * self.context_size:(h + 1) * self.context_size]
             for t in range(global_input.shape[0]):
+
                 t_output, l1_penalty = l1_p_layer(torch.cat([c_t_k[t,:], c_alpha[t,:]],1))
-                h_output = t_output if t == 0 else torch.column_stack([h_output, t_output])
+
+                quantile_output[t,h,:] = t_output
+
                 l1_penalties[h] += l1_penalty
-
-            quantile_output = h_output if h == 0 else torch.row_stack([quantile_output, h_output])
-
-        quantile_output = quantile_output.view(global_input.shape[0], self.horizon_size, self.quantile_size,)
 
         return quantile_output, l1_penalties
 

@@ -21,7 +21,6 @@ def read_df(df, label_name, train_size, val_size, normalize = True):
     train_size: size of the training set
     val_size: size of the validation set
     """
-
     target_df = df.loc[:, label_name:label_name]
     target_df.columns = [1]
     train_target_df = target_df.iloc[:train_size,:]
@@ -56,7 +55,6 @@ class NCMQRNN_dataset(Dataset):
         self.horizon_size = horizon_size
 
 
-
     def __len__(self):
         return self.target_df.shape[1]
 
@@ -73,9 +71,10 @@ class NCMQRNN_dataset(Dataset):
         
         cur_series_tensor = torch.unsqueeze(cur_series_tensor,dim=1) # [seq_len, 1]
         cur_covariate_tensor = torch.tensor(cur_covariate) #[seq_len, covariate_size]
-        cur_series_covariate_tensor = torch.cat([cur_series_tensor, cur_covariate_tensor],dim=1)
+        cur_series_covariate_tensor = cur_covariate_tensor #torch.cat([cur_series_tensor, cur_covariate_tensor],dim=1) # decide whether to take the real data as a covariate
 
         cur_real_vals_tensor = torch.tensor(real_vals_array)
+
         return cur_series_covariate_tensor, cur_real_vals_tensor
 
 
