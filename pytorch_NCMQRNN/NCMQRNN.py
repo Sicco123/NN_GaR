@@ -36,7 +36,7 @@ class NCMQRNN(object):
         self.m = config['m']
         load_stored = config['load_stored_model']
 
-        Path(f"stored_nn_configurations").mkdir(parents=True, exist_ok=True)
+        Path(f"initial_stored_nn_configurations").mkdir(parents=True, exist_ok=True)
 
         self.encoder = Encoder(horizon_size=self.horizon_size,
                                covariate_size=self.covariate_size,
@@ -64,7 +64,7 @@ class NCMQRNN(object):
         self.penalizer.double()
 
         if load_stored:
-            self.load((f'{self.name} + 0')) # This loads the weights of the last optimized model. This weight initialization might significantly increase computation time.
+            self.load()
     
     def train(self, dataset:NCMQRNN_dataset, val_data:NCMQRNN_dataset):
         
@@ -77,13 +77,13 @@ class NCMQRNN(object):
                 batch_size=self.batch_size,
                 num_epochs=self.num_epochs,
                 early_stop_crit = self.early_validation_stopping,
-                name=self.name + self.m,
+                name=self.name,
                 p1 = self.p1,
                 horizon_size = self.horizon_size,
                 device=self.device)
         print("training finished")
 
-    def load(self, name):
+    def load(self, name = 'initial'):
 
         boolean_encoder_path = path.exists(f'stored_nn_configurations/{name}_saved_encoder.pth')
         boolean_gdecoder_path = path.exists(f'stored_nn_configurations/{name}_saved_gdecoder.pth')

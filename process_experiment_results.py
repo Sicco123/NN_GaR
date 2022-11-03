@@ -1,6 +1,7 @@
 import numpy as np
 from backtests import coverage, tick_loss
 import pickle
+from latex_tables import make_latex_table
 
 date = '221014'
 experiment_name = 'sim_exp1'
@@ -13,6 +14,7 @@ test_size = 200
 steps_ahead = [1, 2, 3, 4, 5, 6]
 quantile_levels = np.array([0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95])
 test_stats = ['coverage', 'tick loss']
+experiment_names = ['Linear Regression', 'Sequence-to-Sequence']
 
 results = np.zeros((2,len(quantile_levels),len(steps_ahead), len(test_stats)))
 for size in sample_sizes:
@@ -33,11 +35,4 @@ for size in sample_sizes:
 with open(f'simulation_results/{date}_{M}_stats.pkl', "wb") as f:
     pickle.dump(results, f)
 
-print(results[0,:,:,0])
-print(results[1,:,:,0])
-
-
-print(results[0,:,:,1])
-print(results[1,:,:,1])
-
-print(results.shape)
+make_latex_table(steps_ahead, quantile_levels, test_stats, experiment_names, M, date)

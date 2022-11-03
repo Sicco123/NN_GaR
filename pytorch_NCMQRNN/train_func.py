@@ -4,6 +4,14 @@ from .data import NCMQRNN_dataset
 from .Encoder import Encoder
 from .Decoder import GlobalDecoder, Penalizer
 from torch.utils.data import DataLoader
+from os import path
+
+
+def store_first_model_configuration(encoder, gdecoder, penalizer):
+    if not path.exists(f'stored_nn_configurations/initial_saved_encoder.pth') :
+        torch.save(encoder.state_dict(), f'stored_nn_configurations/initial_saved_encoder.pth')
+        torch.save(gdecoder.state_dict(), f'stored_nn_configurations/initial_saved_gdecoder.pth')
+        torch.save(penalizer.state_dict(), f'stored_nn_configurations/initial_saved_penalizer.pth')
 
 
 def forward_pass(cur_series_covariate_tensor : torch.Tensor,
@@ -173,6 +181,8 @@ def train_fn(encoder:Encoder,
                                                                          name, p1, horizon_size, steps_wo_improvement)
 
 
+
+    store_first_model_configuration(encoder, gdecoder, penalizer) # we can use this to speed up training in later loops
 
     encoder.load_state_dict(torch.load(f'stored_nn_configurations/{name}_saved_encoder.pth'))
     gdecoder.load_state_dict(torch.load(f'stored_nn_configurations/{name}_saved_gdecoder.pth'))
