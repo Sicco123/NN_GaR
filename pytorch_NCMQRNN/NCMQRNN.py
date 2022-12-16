@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from .Encoder import Encoder
 from .Decoder import GlobalDecoder, Penalizer
 from .train_func import train_fn
@@ -6,13 +7,15 @@ from .data import NCMQRNN_dataset
 from pytorch_NCMQRNN.l1_penalization_layer import non_cross_transformation
 from pathlib import Path
 from os import path
+import os
+import uuid
 
 class NCMQRNN(object):
     """
     This class holds the encoder and the decoder.
     """
     def __init__(self, 
-                config, target,
+                config,
                 device):
 
         self.device = device
@@ -32,9 +35,15 @@ class NCMQRNN(object):
         self.p1 = config['p1']
         self.initialization_prior = config['initialization_prior']
         self.by_direction = config['by_direction']
-        self.name = config['save_nn_name']
+
         self.m = config['m']
+        self.seed = config['seed']
         load_stored = config['load_stored_model']
+
+        run_id = uuid.uuid1()
+        self.name = config['save_nn_name'] + str(run_id)
+
+        self.set_non_deterministic()
 
         Path(f"initial_stored_nn_configurations").mkdir(parents=True, exist_ok=True)
 
@@ -44,13 +53,15 @@ class NCMQRNN(object):
                                dropout=self.dropout,
                                layer_size=self.layer_size,
                                by_direction=self.by_direction,
+                               seed= self.seed,
                                device=device)
         
         self.gdecoder = GlobalDecoder(hidden_size=self.hidden_size,
                                     covariate_size=self.covariate_size,
                                     horizon_size=self.horizon_size,
                                     horizon_list = self.horizon_list,
-                                    context_size=self.context_size)
+                                    context_size=self.context_size,
+                                    seed = self.seed)
 
         self.penalizer = Penalizer(quantile_size=self.quantile_size,
                                     context_size=self.context_size,
@@ -58,29 +69,46 @@ class NCMQRNN(object):
                                     horizon_size=self.horizon_size,
                                     horizon_list = self.horizon_list,
                                     initialization_prior = self.initialization_prior,
-                                    target = target)
+                                    seed = self.seed)
         self.encoder.double()
         self.gdecoder.double()
         self.penalizer.double()
 
         if load_stored:
             self.load()
+
+    def set_non_deterministic(self):
+        if self.seed is not None:
+            torch.manual_seed(self.seed)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            torch.use_deterministic_algorithms(True)
+            np.random.seed(self.seed)
+            os.environ['CUBLAS_WORKSPACE_CONFIG']=':16:8'
+            
     
     def train(self, dataset:NCMQRNN_dataset, val_data:NCMQRNN_dataset):
-        
-        train_fn(encoder=self.encoder, 
-                gdecoder=self.gdecoder,
-                penalizer = self.penalizer,
-                train_data=dataset,
-                val_data = val_data,
-                lr=self.lr,
-                batch_size=self.batch_size,
-                num_epochs=self.num_epochs,
-                early_stop_crit = self.early_validation_stopping,
-                name=self.name,
-                p1 = self.p1,
-                horizon_size = self.horizon_size,
-                device=self.device)
+
+        validation_losses =train_fn(encoder=self.encoder,
+                                    gdecoder=self.gdecoder,
+                                    penalizer = self.penalizer,
+                                    train_data=dataset,
+                                    val_data = val_data,
+                                    lr=self.lr,
+                                    batch_size=self.batch_size,
+                                    num_epochs=self.num_epochs,
+                                    early_stop_crit = self.early_validation_stopping,
+                                    name=self.name,
+                                    p1 = self.p1,
+                                    horizon_size = self.horizon_size,
+                                    device=self.device)
+
+        self.validation_losses = validation_losses
+
+        os.remove(f'stored_nn_configurations/{self.name}_saved_encoder.pth')
+        os.remove(f'stored_nn_configurations/{self.name}_saved_gdecoder.pth')
+        os.remove(f'stored_nn_configurations/{self.name}_saved_penalizer.pth')
+
         print("training finished")
 
     def load(self, name = 'initial'):
@@ -141,18 +169,19 @@ class NCMQRNN(object):
 
             return output_array
 
-    def predictions(self,target_df, covariate_df, col_name):
+    def predictions(self, covariate_df, target_df = None, col_name = None):
 
-        input_target_tensor = torch.tensor(target_df[[col_name]].to_numpy())
+        
         full_covariate = covariate_df.to_numpy()
         full_covariate_tensor = torch.tensor(full_covariate)
-
-
-        input_target_tensor = input_target_tensor.to(self.device)
         full_covariate_tensor = full_covariate_tensor.to(self.device)
 
+        if target_df is not None:
+            input_target_tensor = torch.tensor(target_df[[col_name]].to_numpy())
+            input_target_tensor = input_target_tensor.to(self.device)
+            
         with torch.no_grad():
-            input_target_covariate_tensor = full_covariate_tensor#torch.cat([input_target_tensor, full_covariate_tensor], dim=1)
+            input_target_covariate_tensor = full_covariate_tensor if target_df is None else torch.cat([input_target_tensor, full_covariate_tensor], dim=1)
             input_target_covariate_tensor = torch.unsqueeze(input_target_covariate_tensor, dim= 0) #[1, seq_len, 1+covariate_size]
             input_target_covariate_tensor = input_target_covariate_tensor.permute(1,0,2) #[seq_len, 1, 1+covariate_size]
 
@@ -163,7 +192,7 @@ class NCMQRNN(object):
 
 
             penalizer_output, loss = self.penalizer(gdecoder_output)
-            penalizer_output = penalizer_output.view(len(target_df), self.horizon_size,self.quantile_size)
+            penalizer_output = penalizer_output.view(len(covariate_df), self.horizon_size,self.quantile_size)
 
 
             i = 1

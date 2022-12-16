@@ -1,6 +1,15 @@
 import torch
 import torch.nn as nn
+import numpy as np
 from pytorch_NCMQRNN.l1_penalization_layer import l1_p
+
+def set_non_deterministic(seed):
+        if seed is not None:
+            torch.manual_seed(seed)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            torch.use_deterministic_algorithms(True)
+            np.random.seed(seed)
 
 class GlobalDecoder(nn.Module):
     """
@@ -14,8 +23,12 @@ class GlobalDecoder(nn.Module):
                  covariate_size:int,
                  horizon_size:int,
                  horizon_list:list,
-                 context_size:int):
+                 context_size:int,
+                 seed:int = None):
         super(GlobalDecoder,self).__init__()
+
+        set_non_deterministic(seed)
+       
         self.hidden_size = hidden_size
         self.covariate_size = covariate_size
         self.horizon_size = horizon_size
@@ -26,6 +39,7 @@ class GlobalDecoder(nn.Module):
                                 out_features= (len(self.horizon_list)+1)*context_size)
 
         self.activation = nn.Sigmoid()
+    
     def forward(self, input):
         layer1_output = self.linear1(input)
         layer1_output = self.activation(layer1_output)
@@ -47,13 +61,17 @@ class LocalDecoder(nn.Module):
                 quantile_size,
                 context_size,
                 quantiles,
-                horizon_size):
+                horizon_size,
+                seed = None):
         super(LocalDecoder,self).__init__()
+        
         self.covariate_size = covariate_size
         self.quantiles = quantiles
         self.quantile_size = quantile_size
         self.horizon_size = horizon_size
         self.context_size = context_size
+
+        set_non_deterministic(seed)
 
         self.linear1 = nn.Linear(in_features= (horizon_size+1)*context_size ,
                                  out_features= horizon_size* context_size)
@@ -77,8 +95,8 @@ class Penalizer(nn.Module):
                 quantiles,
                 horizon_size,
                 horizon_list,
-                initialization_prior = None,
-                target = None):
+                seed = None,
+                initialization_prior = None):
         super(Penalizer,self).__init__()
 
         self.quantiles = quantiles
@@ -87,10 +105,12 @@ class Penalizer(nn.Module):
         self.context_size = context_size
         self.horizon_list = horizon_list
 
+        set_non_deterministic(seed)
+        
         self.l1_p_layers = nn.ModuleList()
-        for h in range(len(self.horizon_list)): # For every horizon we set a different layer
+        for h in range(self.horizon_size): # For every horizon we set a different layer
             l1_p_layer = l1_p(context_size*2,
-                             quantile_size, quantile_levels = self.quantiles, target = target, initialization_prior = initialization_prior)
+                             quantile_size,  initialization_prior = initialization_prior)
 
             self.l1_p_layers.append(l1_p_layer)
 
@@ -98,7 +118,7 @@ class Penalizer(nn.Module):
 
         l1_penalties = torch.zeros((self.horizon_size))
         quantile_output = torch.zeros((global_input.shape[0], self.horizon_size, self.quantile_size))
-        for h in range(len(self.horizon_list)):
+        for h in range(self.horizon_size):
             l1_p_layer = self.l1_p_layers[h]
             c_alpha = global_input[:, :, -self.context_size:]  # get c_alpha
             c_t_k = global_input[:, :, h * self.context_size:(h + 1) * self.context_size]
@@ -109,6 +129,7 @@ class Penalizer(nn.Module):
                 quantile_output[t,h,:] = t_output
 
                 l1_penalties[h] += l1_penalty
+
 
         return quantile_output, l1_penalties
 

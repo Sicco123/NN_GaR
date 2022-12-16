@@ -1,5 +1,14 @@
 import torch
 import torch.nn as nn
+import numpy as np
+
+def set_non_deterministic(seed):
+        if seed is not None:
+            torch.manual_seed(seed)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            torch.use_deterministic_algorithms(True)
+            np.random.seed(seed)
 
 
 class Encoder(nn.Module):
@@ -15,7 +24,8 @@ class Encoder(nn.Module):
                 dropout:float, 
                 layer_size:int, 
                 by_direction:bool,
-                device):
+                device,
+                seed:int = None):
         super(Encoder, self).__init__()
         self.horizon_size =horizon_size
         self.covariate_size = covariate_size
@@ -23,6 +33,8 @@ class Encoder(nn.Module):
         self.layer_size = layer_size
         self.by_direction = by_direction
         self.dropout = dropout
+
+        set_non_deterministic(seed)
 
         self.LSTM = nn.LSTM(input_size= covariate_size+1, 
                             hidden_size=hidden_size, 

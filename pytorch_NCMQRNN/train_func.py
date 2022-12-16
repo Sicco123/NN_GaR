@@ -6,6 +6,14 @@ from .Decoder import GlobalDecoder, Penalizer
 from torch.utils.data import DataLoader
 from os import path
 
+def set_non_deterministic(seed):
+        if seed is not None:
+            torch.manual_seed(seed)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            torch.use_deterministic_algorithms(True)
+            np.random.seed(seed)
+        
 
 def store_first_model_configuration(encoder, gdecoder, penalizer):
     if not path.exists(f'stored_nn_configurations/initial_saved_encoder.pth') :
@@ -22,8 +30,8 @@ def forward_pass(cur_series_covariate_tensor : torch.Tensor,
             device):
 
     ### Set Type and load to device
-    cur_series_covariate_tensor = cur_series_covariate_tensor.double()  # [batch_size, seq_len, 1+covariate_size]
-    cur_real_vals_tensor = cur_real_vals_tensor.double()  # [batch_size, seq_len, horizon_size]
+    cur_series_covariate_tensor = cur_series_covariate_tensor.to()  # [batch_size, seq_len, 1+covariate_size]
+    cur_real_vals_tensor = cur_real_vals_tensor.to()  # [batch_size, seq_len, horizon_size]
 
     cur_series_covariate_tensor = cur_series_covariate_tensor.to(device)
     cur_real_vals_tensor = cur_real_vals_tensor.to(device)
@@ -34,7 +42,8 @@ def forward_pass(cur_series_covariate_tensor : torch.Tensor,
     ### Reshape
     cur_series_covariate_tensor = cur_series_covariate_tensor.permute(1, 0,
                                                                       2)  # [seq_len, batch_size, 1+covariate_size]
-    #print(cur_series_covariate_tensor.shape)
+   
+    
     enc_hs = encoder(cur_series_covariate_tensor)  # [seq_len, batch_size, hidden_size]
     hidden_and_covariate = enc_hs  # [seq_len, batch_size, hidden_size+covariate_size * horizon_size]
 
@@ -49,6 +58,7 @@ def forward_pass(cur_series_covariate_tensor : torch.Tensor,
     #print(penalizer_output.shape)
     #print(penalizer_output[36:39, :, 4].detach().numpy())
     seq_len = penalizer_output.shape[0]
+
     batch_size = 1  # local_decoder_output.shape[1]
 
     penalizer_output = penalizer_output.view(batch_size, seq_len, horizon_size,
@@ -88,6 +98,7 @@ def weight_optimization_step(data_iter, encoder_optimizer, gdecoder_optimizer, p
         output, l1_penalties = forward_pass(cur_series_tensor, cur_real_vals_tensor,
                                             encoder, gdecoder, penalizer, device)
         # calc loss
+    
         loss = calc_loss(cur_real_vals_tensor, output, l1_penalties, penalizer, device, p1)
         loss.backward()
 
@@ -101,6 +112,7 @@ def weight_optimization_step(data_iter, encoder_optimizer, gdecoder_optimizer, p
 
 def early_stopping_validation(val_iter, encoder, gdecoder, penalizer, device, epoch_loss_mean, min_valid_loss, i, train_len, name, p1, horizon_size, steps_wo_improvement):
     valid_loss = 0.0
+    valid_steps = 0
 
     for val_cur_series_tensor, val_cur_real_vals_tensor in  val_iter:
 
@@ -109,22 +121,29 @@ def early_stopping_validation(val_iter, encoder, gdecoder, penalizer, device, ep
             val_cur_series_tensor, val_cur_real_vals_tensor = val_cur_series_tensor.cuda(), val_cur_real_vals_tensor.cuda()
 
         # forward pass
-        output, l1_penalties = forward_pass(val_cur_series_tensor, val_cur_real_vals_tensor,
+        output, l1_penalties = forward_pass(val_cur_series_tensor[:, train_len:, :], val_cur_real_vals_tensor[:, train_len:, :],
                                             encoder, gdecoder, penalizer, device)
+        
+    
 
         # calc loss
-        loss = calc_loss(val_cur_real_vals_tensor[:, train_len:, :], output[:, train_len:, :, :], l1_penalties, penalizer,
+        loss = calc_loss(val_cur_real_vals_tensor[:, train_len:, :], output, l1_penalties, penalizer,
                          device, p1)
 
         # Calculate Loss
         valid_loss += loss.item()
+        valid_steps += len(val_cur_series_tensor[:, train_len:, :][0])
+  
+    
+    val_loss = valid_loss / (valid_steps*horizon_size)
+
     if (i + 1) % 50 == 0:
         print(
-            f'Epoch {i + 1} \t\t Training Loss: {epoch_loss_mean} \t\t Validation Loss: {valid_loss / (horizon_size * (len(val_cur_real_vals_tensor[0, train_len:, 0])))}')
+            f'Epoch {i + 1} \t\t Training Loss: {epoch_loss_mean} \t\t Validation Loss: {val_loss}')
 
-    if min_valid_loss > valid_loss:
-        print(f'Validation Loss Decreased({round(min_valid_loss / (horizon_size * (len(val_cur_real_vals_tensor[0, train_len:, 0]))), 6)}--->{round(valid_loss / (horizon_size * (len(val_cur_real_vals_tensor[0, train_len:, 0]))), 6)}) \t Saving The Model')
-        min_valid_loss = valid_loss
+    if min_valid_loss > val_loss:
+        print(f'Validation Loss Decreased({round((min_valid_loss ), 6)}--->{round((val_loss ), 6)}) \t Saving The Model')
+        min_valid_loss = val_loss
 
         # Saving State Dict
         torch.save(encoder.state_dict(), f'stored_nn_configurations/{name}_saved_encoder.pth')
@@ -135,7 +154,7 @@ def early_stopping_validation(val_iter, encoder, gdecoder, penalizer, device, ep
     else:
         steps_wo_improvement += 1
 
-    return min_valid_loss, steps_wo_improvement
+    return min_valid_loss, steps_wo_improvement, val_loss
 
 def train_fn(encoder:Encoder, 
             gdecoder: GlobalDecoder,
@@ -150,7 +169,11 @@ def train_fn(encoder:Encoder,
             name: str,
             early_stop_crit: int,
             device,
+            seed: int = None,
             ):
+
+    set_non_deterministic(seed)
+
     encoder_optimizer = torch.optim.Adam(encoder.parameters(),lr=lr)
     gdecoder_optimizer = torch.optim.Adam(gdecoder.parameters(),lr=lr)
     penalizer_optimizer = torch.optim.Adam(penalizer.parameters(), lr=lr)
@@ -163,6 +186,7 @@ def train_fn(encoder:Encoder,
     min_valid_loss = np.inf
     steps_wo_improvement = 0
 
+    validation_losses =[]
     for i in range(num_epochs):
 
         if steps_wo_improvement >= early_stop_crit:
@@ -176,10 +200,11 @@ def train_fn(encoder:Encoder,
         gdecoder.eval()
         penalizer.eval()
 
-        min_valid_loss, steps_wo_improvement = early_stopping_validation(val_iter, encoder, gdecoder, penalizer, device,
+        min_valid_loss, steps_wo_improvement, val_loss = early_stopping_validation(val_iter, encoder, gdecoder, penalizer, device,
                                                                          epoch_loss_mean, min_valid_loss, i, train_len,
                                                                          name, p1, horizon_size, steps_wo_improvement)
 
+        validation_losses.append(val_loss)
 
 
     store_first_model_configuration(encoder, gdecoder, penalizer) # we can use this to speed up training in later loops
@@ -190,3 +215,5 @@ def train_fn(encoder:Encoder,
     encoder.eval()
     gdecoder.eval()
     penalizer.eval()
+
+    return validation_losses

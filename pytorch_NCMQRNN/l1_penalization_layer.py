@@ -17,12 +17,12 @@ class l1_p(nn.Module): #This class builds on the layer class of pytorch
 
 
         # initialization
-        delta_0_matrix, delta_coef_matrix =self.initialization(target, quantile_levels)
+        delta_0_matrix, delta_coef_matrix =self.initialization()
 
         self.delta_coef_matrix = nn.Parameter(delta_coef_matrix)
         self.delta_0_matrix = nn.Parameter(delta_0_matrix)
 
-    def initialization(self, target, quantile_levels):
+    def initialization(self):
 
         if self.initialization_prior == 'Gaussian':
             """
@@ -32,8 +32,8 @@ class l1_p(nn.Module): #This class builds on the layer class of pytorch
             delta_coef_matrix = torch.Tensor(self.input_shape, self.number_of_quantiles)
             delta_0_matrix = torch.Tensor(1, self.number_of_quantiles)
 
-            nn.init.normal_(delta_coef_matrix, 0)
-            nn.init.normal_(delta_0_matrix, 0)
+            nn.init.normal_(delta_coef_matrix, 0, 1)
+            nn.init.normal_(delta_0_matrix, 0, 1)
 
         else:
             """
