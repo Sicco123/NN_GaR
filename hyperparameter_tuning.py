@@ -1,7 +1,7 @@
 import os
 os.chdir('/Users/siccokooiker/surfdrive/PycharmProjects/NN_GaR')
 print(os.getcwd())
-from sim_experiment_2_SESTAR import training_loop
+from sim_experiment_2_NARDL_S2S import training_loop
 from functools import partial
 import numpy as np
 import pandas as pd

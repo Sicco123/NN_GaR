@@ -39,3 +39,9 @@ node_modules
 
 # Ignore all
 *.zip
+
+# Ignore all
+*.pth
+
+# Ignore all
+*.pbz2

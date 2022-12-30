@@ -5,7 +5,9 @@ import numpy as np
 from pathlib import Path
 import torch
 import os
+import bz2
 import pickle
+import _pickle as cPickle
 import json
 
 ### Magic Numbers
@@ -52,8 +54,9 @@ def store_quantile_predictions(config, quantile_predictions):
     if config['store_results']:
         Path(f"simulation_results/{config['dir_to_store_reg_quantiles']}/{sample_size}/{m}").mkdir(parents=True, exist_ok=True)
         for hor in range(config['horizon_size']):
-            np.savetxt(f"simulation_results/{config['dir_to_store_reg_quantiles']}/{sample_size}/{m}/{config['horizon_list'][hor]}_step_ahead.csv",
-                       quantile_predictions[:, hor, :], delimiter=",")
+            with bz2.BZ2File(f"simulation_results/{config['dir_to_store_reg_quantiles']}/{sample_size}/{m}/{config['horizon_list'][hor]}_step_ahead.pbz2", 'w') as f: 
+                cPickle.dump(quantile_predictions[:, hor, :], f)
+         
 
 def delete_all_files_in_folder(dir):
 
@@ -69,10 +72,10 @@ def main():
             config['seed'] += m
             
             ### read data from pkl file
-            with open(f'simulated_SESTAR_data/{500}/{date}/{m}.pkl', 'rb') as f:
-                data = pickle.load(f)
-                data = data[-sample_size-test_size:-test_size,:]
-                df = pd.DataFrame(data)
+            data = bz2.BZ2File(f'simulated_NARDL_data/{m}.pbz2', 'rb')
+            data = cPickle.load(data)
+            data = data[(sample_size+test_size):]
+            df = pd.DataFrame(data)
 
             if m == 0:
                 store_setting = config['load_stored_model']
