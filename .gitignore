@@ -36,3 +36,6 @@ node_modules
 
 # Ignore all 
 *.png
+
+# Ignore all
+*.zip
