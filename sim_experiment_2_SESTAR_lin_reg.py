@@ -6,7 +6,8 @@ import datetime
 import time
 import multiprocessing
 from functools import partial
-from prepare_data import prepare_forecast_target, prepare_forecast_predictors
+import pickle
+from linear_quantile.prepare_data import prepare_forecast_target, prepare_forecast_predictors
 
 horizon_list = [1,2,3,4,5,6,12]
 quantile_levels = [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95]
@@ -14,8 +15,7 @@ sample_sizes = [150, 250, 500]
 M = 10000
 dir_to_store_simulation = "simulated_data"
 dir_to_store_reg_quantiles = "linear_quantile_regression_sestar"
-date = datetime.datetime.now()
-day = f'{date.strftime("%y")}{date.strftime("%m")}{date.strftime("%d")}'
+date = "221014"
 
 test_size = 200
 
@@ -43,7 +43,12 @@ def main():
     for m in range(0,M):
 
         for sample_size in sample_sizes:
-            data = np.loadtxt(f'simulated_data/{sample_size}/{m}_221014.csv', delimiter=',')
+            with open(f'simulated_SESTAR_data/{500}/{date}/{m}.pkl', 'rb') as f:
+                data = pickle.load(f)
+                data = data[-sample_size-test_size:-test_size,:]
+               
+
+            #data = np.loadtxt(f'simulated_data/{sample_size}/{m}_221014.csv', delimiter=',')
 
             y = data[:, 0]
             X = data[:, 1:]

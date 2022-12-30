@@ -64,7 +64,7 @@ def main():
     date = config['date']
     sample_size = config['sample_size']
     test_size = config['test_size']
-    for m in range(4192,config['M']):
+    for m in range(4954,config['M']):
             config['m'] = m
             config['seed'] += m
             
