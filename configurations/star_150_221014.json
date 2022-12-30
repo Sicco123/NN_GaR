@@ -23,7 +23,7 @@
     1
   ],
   "hidden_size": 8,
-  "context_size": 8,
+  "context_size": 1,
   "covariate_size": 3,
   "p1": 20,
   "initialization_prior": "Gaussian",
@@ -38,11 +38,11 @@
   "load_stored_model": true,
   "store_results": true,
   "store_model": false,
-  "dir_to_store_reg_quantiles": "s2s_results_nardl",
+  "dir_to_store_reg_quantiles": "s2s_results_star",
   "save_nn_name": "s2s_sim_exp2",
   "M": 3000,
   "m": 0,
-  "sample_size": 250,
+  "sample_size": 150,
   "test_size": 200,
   "date": "221014",
   "seed": 221014
