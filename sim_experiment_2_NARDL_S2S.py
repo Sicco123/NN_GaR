@@ -74,7 +74,7 @@ def main():
             ### read data from pkl file
             data = bz2.BZ2File(f'simulated_NARDL_data/{m}.pbz2', 'rb')
             data = cPickle.load(data)
-            data = data[(sample_size+test_size):]
+            data = data[-(sample_size+test_size):]
             df = pd.DataFrame(data)
 
             if m == 0:

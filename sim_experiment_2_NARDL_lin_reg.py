@@ -7,6 +7,8 @@ import time
 import multiprocessing
 from functools import partial
 import pickle
+import bz2
+import _pickle as cPickle
 from linear_quantile.prepare_data import prepare_forecast_target, prepare_forecast_predictors
 
 horizon_list = [1,2,3,4,5,6,12]
@@ -14,7 +16,7 @@ quantile_levels = [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95]
 sample_sizes = [150, 250, 500]
 M = 10000
 dir_to_store_simulation = "simulated_data"
-dir_to_store_reg_quantiles = "linear_quantile_regression_sestar"
+dir_to_store_reg_quantiles = "linear_quantile_regression_nardl"
 date = "221014"
 
 test_size = 200
@@ -31,8 +33,10 @@ def estimation(h, X_train, X, sample_size, y_star, m):
     reg_quantiles = model.predict_multiple(X_star)
 
     Path(f"simulation_results/{dir_to_store_reg_quantiles}/{sample_size}/{m}").mkdir(parents=True, exist_ok=True)
-    np.savetxt(f"simulation_results/{dir_to_store_reg_quantiles}/{sample_size}/{m}/{h}_step_ahead.csv", reg_quantiles,
-               delimiter=",")
+    
+    with bz2.BZ2File(f"simulation_results/{dir_to_store_reg_quantiles}/{sample_size}/{m}/{h}_step_ahead.pbz2", 'w') as f: 
+        cPickle.dump(reg_quantiles, f)
+    
     np.savetxt(f"simulation_results/{dir_to_store_reg_quantiles}/{sample_size}/{m}/{h}_reg_params.csv", params,
                delimiter=",")
 
@@ -43,10 +47,10 @@ def main():
     for m in range(0,M):
 
         for sample_size in sample_sizes:
-            with open(f'simulated_SESTAR_data/{500}/{date}/{m}.pkl', 'rb') as f:
-                data = pickle.load(f)
-                data = data[-sample_size-test_size:-test_size,:]
-               
+            data = bz2.BZ2File(f'simulated_NARDL_data/{m}.pbz2', 'rb')
+            data = cPickle.load(data)
+            data = data[-(sample_size+test_size):-test_size,:]
+            
 
             #data = np.loadtxt(f'simulated_data/{sample_size}/{m}_221014.csv', delimiter=',')
 

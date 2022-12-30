@@ -22,18 +22,6 @@ node_modules
 # Ignore all .pyc files
 *.pyc
 
-# Ignore all .pyd files
-*.pyd
-
-# Ignore all .pyo files
-*.pyo
-
-# Ignore all .pyw files
-*.pyw
-
-# Ignore all .pyz files
-*.pyz
-
 # Ignore all 
 *.png
 
